@@ -1,0 +1,45 @@
+{
+  "name": "noh",
+  "version": "0.1.0",
+  "description": "Node.js On HTML: tarayıcıda gerçek Linux + gerçek Node.js çalıştıran mini container (v86 tabanlı).",
+  "type": "module",
+  "main": "src/noh.js",
+  "module": "src/noh.js",
+  "types": "src/noh.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/noh.d.ts",
+      "import": "./src/noh.js"
+    }
+  },
+  "files": [
+    "src",
+    "tools",
+    "examples",
+    "dist/noh.js",
+    "README.md"
+  ],
+  "scripts": {
+    "image": "bash tools/build-image.sh",
+    "snapshot": "node tools/make-snapshot.mjs",
+    "test": "node test/noh.test.mjs && node test/browser.test.mjs",
+    "build": "node tools/bundle.mjs"
+  },
+  "peerDependencies": {
+    "v86": ">=0.5.0"
+  },
+  "peerDependenciesMeta": {
+    "v86": {
+      "optional": true
+    }
+  },
+  "license": "MIT",
+  "keywords": [
+    "nodejs",
+    "browser",
+    "wasm",
+    "v86",
+    "container",
+    "webcontainer"
+  ]
+}
