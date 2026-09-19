@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>NOH — script etiketiyle Node.js</title>
+<style>
+  body{font:15px/1.5 system-ui,sans-serif;max-width:720px;margin:2rem auto;padding:0 1rem}
+  pre{background:#111;color:#ddd;padding:1rem;border-radius:8px;min-height:6rem;white-space:pre-wrap}
+  .noh-stderr{color:#ff7b72} #durum{color:#888}
+</style>
+</head>
+<body>
+<h1>Tarayıcıda gerçek Node.js</h1>
+<p id="durum">container hazırlanıyor…</p>
+<pre data-noh-output></pre>
+
+<!-- 1) NOH: tek satır. v86 dosyaları noh.js'in yanından otomatik bulunur. -->
+<script src="../dist/noh.js"></script>
+
+<!-- 2) Node kütüphanesi: tarayıcı çalıştırmaz, NOH container'a yazar. require("mylib") olur. -->
+<script type="text/node" src="./mylib.js" data-name="mylib"></script>
+
+<!-- 3) Node kodu: gerçek Node.js içinde çalışır. -->
+<script type="text/node">
+  const lib = require("mylib");
+  console.log(lib.selamla("dünya"));
+  console.log("node", process.version, process.platform, process.arch);
+</script>
+
+<script>
+  // Sıradan tarayıcı JS'i: NOH'a erişim.
+  NOH.on("ready", (e) => document.getElementById("durum").textContent = "hazır — Node " + e.node);
+  NOH.on("error", (e) => document.getElementById("durum").textContent = "hata: " + e.message);
+
+  // Programatik kullanım da mümkün:
+  NOH.ready.then(async () => {
+    const r = await NOH.run("console.log([1,2,3].map(x => x * 2).join(','))");
+    console.log("tarayıcıya dönen sonuç:", r.stdout.trim(), "kod:", r.code);
+  });
+</script>
+</body>
+</html>

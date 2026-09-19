@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NOH — Node.js On HTML</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --fg:#e6e6e6; --mut:#8b93a1; --line:#232733; --acc:#7cc4ff; --ok:#6fdc8c; --err:#ff7b72; }
+  @media (prefers-color-scheme: light){ :root{ --bg:#fafafa; --fg:#15171c; --mut:#5b6472; --line:#dfe3ea; --acc:#0a66c2; --ok:#1a7f37; --err:#cf222e; } }
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif}
+  header{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  h1{font-size:16px;margin:0} .pill{font:12px ui-monospace,monospace;padding:2px 8px;border:1px solid var(--line);border-radius:99px;color:var(--mut)}
+  .pill.ok{color:var(--ok);border-color:var(--ok)} .pill.err{color:var(--err);border-color:var(--err)}
+  main{display:grid;grid-template-columns:1fr 1fr;gap:0;height:calc(100vh - 56px)}
+  @media(max-width:800px){main{grid-template-columns:1fr;height:auto}}
+  section{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--line)}
+  section:last-child{border-right:0}
+  .bar{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;color:var(--mut)}
+  button{font:inherit;padding:5px 12px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--fg);cursor:pointer}
+  button.primary{background:var(--acc);color:#fff;border-color:var(--acc)} button:disabled{opacity:.45;cursor:not-allowed}
+  textarea{flex:1;min-height:200px;width:100%;border:0;outline:0;resize:none;padding:12px;background:transparent;color:var(--fg);font:13px/1.5 ui-monospace,monospace}
+  pre{flex:1;margin:0;padding:12px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:13px/1.5 ui-monospace,monospace}
+  .e{color:var(--err)} .m{color:var(--mut)} .o{color:var(--ok)}
+  input.cmd{flex:1;background:transparent;border:1px solid var(--line);border-radius:6px;padding:5px 8px;color:var(--fg);font:13px ui-monospace,monospace}
+  #load{padding:10px 18px;border-bottom:1px solid var(--line);color:var(--mut);font-size:13px}
+  progress{width:180px;vertical-align:middle}
+</style>
+</head>
+<body>
+<header>
+  <h1>NOH · Node.js On HTML</h1>
+  <span class="pill" id="st">beklemede</span>
+  <span class="pill" id="ver">node: —</span>
+  <button class="primary" id="boot">Container'ı başlat</button>
+</header>
+<div id="load" hidden><progress id="pr" max="1" value="0"></progress> <span id="ph">—</span></div>
+
+<main>
+  <section>
+    <div class="bar"><span>index.js</span><span style="flex:1"></span><button id="run" disabled>▶ Node ile çalıştır</button></div>
+    <textarea id="code" spellcheck="false">// Bu kod gerçek Node.js içinde çalışır (emüle edilmiş Linux, tarayıcıda).
+const os = require("os");
+const crypto = require("crypto");
+const fs = require("fs");
+
+console.log("node:", process.version, "| platform:", process.platform, process.arch);
+console.log("cpu :", os.cpus().length, "çekirdek");
+console.log("sha256('noh'):", crypto.createHash("sha256").update("noh").digest("hex"));
+
+fs.writeFileSync("/tmp/x.txt", "merhaba container");
+console.log("fs  :", fs.readFileSync("/tmp/x.txt", "utf8"));
+
+console.error("bu satır stderr'e gider");
+process.exit(3);
+</textarea>
+  </section>
+  <section>
+    <div class="bar"><span>çıktı</span><span style="flex:1"></span>
+      <input class="cmd" id="cmd" placeholder="kabuk komutu, örn: uname -a" disabled>
+      <button id="sh" disabled>çalıştır</button></div>
+    <pre id="out"></pre>
+  </section>
+</main>
+
+<!-- v86 derlemesi (libv86.js + v86.wasm) kendi sunucunuzdan servis edilir -->
+<script src="../dist/libv86.js"></script>
+<script type="module">
+import { NOH } from "../src/noh.js";
+
+const $ = (id) => document.getElementById(id);
+const out = $("out");
+const put = (t, cls = "") => { const s = document.createElement("span"); if (cls) s.className = cls; s.textContent = t; out.appendChild(s); out.scrollTop = out.scrollHeight; };
+const setSt = (t, cls = "") => { $("st").textContent = t; $("st").className = "pill " + cls; };
+
+let noh;
+
+$("boot").onclick = async () => {
+  $("boot").disabled = true;
+  setSt("açılıyor…");
+  $("load").hidden = false;
+  const t0 = performance.now();
+
+  noh = new NOH({
+    V86: window.V86,
+    assets: {
+      wasm: "../dist/v86.wasm",
+      seabios: "../dist/seabios.bin",
+      vgabios: "../dist/vgabios.bin",
+      // Hızlı yol: snapshot varsa onu kullan, yoksa soğuk boot.
+      ...(await exists("../dist/noh-state.bin")
+        ? { initialState: "../dist/noh-state.bin" }
+        : { bzimage: "../dist/noh-vmlinuz", initrd: "../dist/noh-initramfs.gz" }),
+    },
+    memoryMB: 512,
+    onProgress: ({ phase, ratio }) => { $("pr").value = ratio; $("ph").textContent = phase + " " + Math.round(ratio * 100) + "%"; },
+  });
+
+  try {
+    await noh.boot();
+    const v = await noh.nodeVersion();
+    $("ver").textContent = "node: " + v;
+    setSt("hazır (" + ((performance.now() - t0) / 1000).toFixed(1) + " sn)", "ok");
+    $("run").disabled = $("cmd").disabled = $("sh").disabled = false;
+    put("✓ container hazır — Node " + v + "\n", "o");
+  } catch (e) {
+    setSt("hata", "err");
+    put(String(e) + "\n", "e");
+  } finally {
+    $("load").hidden = true;
+  }
+};
+
+$("run").onclick = async () => {
+  $("run").disabled = true;
+  put("\n$ node index.js\n", "m");
+  try {
+    const r = await noh.runNode($("code").value);
+    if (r.stdout) put(r.stdout);
+    if (r.stderr) put(r.stderr, "e");
+    put(`[çıkış kodu: ${r.code}]\n`, "m");
+  } catch (e) { put(String(e) + "\n", "e"); }
+  $("run").disabled = false;
+};
+
+const runShell = async () => {
+  const c = $("cmd").value.trim(); if (!c) return;
+  put("\n$ " + c + "\n", "m");
+  try {
+    const r = await noh.exec(c);
+    if (r.stdout) put(r.stdout);
+    if (r.stderr) put(r.stderr, "e");
+    put(`[çıkış kodu: ${r.code}]\n`, "m");
+  } catch (e) { put(String(e) + "\n", "e"); }
+};
+$("sh").onclick = runShell;
+$("cmd").onkeydown = (e) => { if (e.key === "Enter") runShell(); };
+
+async function exists(url) { try { return (await fetch(url, { method: "HEAD" })).ok; } catch { return false; } }
+</script>
+</body>
+</html>
